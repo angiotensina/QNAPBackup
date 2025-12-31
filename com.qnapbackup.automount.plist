@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.qnapbackup.automount</string>
+    
+    <key>Comment</key>
+    <string>Monta automáticamente el share QNAP para backups de Milvus/MongoDB</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/joaquinchamorromohedas/Desktop/QNAPBackup/scripts/automount_qnap.sh</string>
+    </array>
+    
+    <!-- Ejecutar al iniciar sesión -->
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <!-- También ejecutar cada hora para reconectar si se pierde -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    
+    <!-- Reintentar si falla -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>NetworkState</key>
+        <true/>
+    </dict>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/joaquinchamorromohedas/Desktop/QNAPBackup/logs/launchagent.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/joaquinchamorromohedas/Desktop/QNAPBackup/logs/launchagent_error.log</string>
+</dict>
+</plist>

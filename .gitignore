@@ -1,0 +1,11 @@
+# Ignorar archivos sensibles
+.env
+*.log
+logs/
+
+# macOS
+.DS_Store
+._*
+
+# Backups locales
+backups/

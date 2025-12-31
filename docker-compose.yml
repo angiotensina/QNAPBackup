@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  milvus-mongodb-backup:
+    build: .
+    image: milvus-mongodb-backup:latest
+    container_name: milvus-mongodb-backup
+    restart: always
+    privileged: true  # Necesario para montar CIFS
+    
+    environment:
+      # Configuración QNAP
+      - QNAP_HOST=192.168.1.140
+      - QNAP_SHARE=JOAQUIN
+      - QNAP_USER=CARMENVELASCO\joaquin
+      - QNAP_PASSWORD=${QNAP_PASSWORD}  # Desde .env o variable de entorno
+      - QNAP_MOUNT_POINT=/mnt/qnap
+      
+      # Schedule: Por defecto domingos a las 3:00 AM
+      # Formato cron: minuto hora día-mes mes día-semana
+      - BACKUP_SCHEDULE=0 3 * * 0
+      
+      # Ejecutar backup al iniciar el contenedor
+      - RUN_ON_START=false
+      
+      # Timezone
+      - TZ=Europe/Madrid
+    
+    volumes:
+      # Acceso al socket de Docker para ejecutar comandos
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+      # Montar el share QNAP del host (ya montado en macOS)
+      - /Volumes/JOAQUIN:/mnt/qnap
+      
+      # Logs locales (opcional)
+      - ./logs:/app/logs
+    
+    networks:
+      - backup-network
+    
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "pgrep", "-x", "crond"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  backup-network:
+    driver: bridge
