@@ -5,12 +5,15 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config.env" 2>/dev/null || true
+
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_NAME="milvus_backup_${TIMESTAMP}"
 
-# Usar path del HOST que Docker Desktop conoce
-HOST_BACKUP_PATH="/Volumes/JOAQUIN/milvus-backups/volumes/$BACKUP_NAME"
-QNAP_MOUNT_POINT="${QNAP_MOUNT_POINT:-/mnt/qnap}"
+# Configuración de rutas
+QNAP_MOUNT_POINT="${QNAP_MOUNT_POINT:-/Volumes/JOAQUIN}"
+HOST_BACKUP_PATH="$QNAP_MOUNT_POINT/milvus-backups/volumes/$BACKUP_NAME"
 BACKUP_PATH="$QNAP_MOUNT_POINT/milvus-backups/volumes/$BACKUP_NAME"
 LOG_FILE="$QNAP_MOUNT_POINT/milvus-backups/logs/milvus_${TIMESTAMP}.log"
 

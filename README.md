@@ -1,6 +1,6 @@
-# 🗄️ Milvus Backup to QNAP
+# 🗄️ Database Backup to QNAP
 
-Sistema de backup automatizado para instancias Milvus hacia NAS QNAP.
+Sistema de backup automatizado para MongoDB, Milvus y PostgreSQL hacia NAS QNAP.
 
 ## 📋 Requisitos
 
@@ -8,6 +8,14 @@ Sistema de backup automatizado para instancias Milvus hacia NAS QNAP.
 - Python 3.8+ con pip
 - Acceso al NAS QNAP (192.168.1.140)
 - Share SMB configurado en QNAP
+
+## 🗃️ Bases de Datos Soportadas
+
+| Base de Datos | Tipo | Método de Backup |
+|---------------|------|------------------|
+| 🍃 MongoDB | NoSQL/Documentos | Volúmenes Docker |
+| 🔷 Milvus | Vector DB | Volúmenes Docker |
+| 🐘 PostgreSQL | Relacional | pg_dump + Volúmenes |
 
 ## 🚀 Configuración Inicial
 
@@ -42,7 +50,31 @@ pip install pymilvus numpy
 
 ## 📦 Uso
 
-### Backup Manual Completo
+### 🚀 Backup Completo de TODAS las Bases de Datos (Recomendado)
+
+```bash
+./scripts/backup_all_databases.sh
+```
+
+Este script hace backup de:
+1. ✅ MongoDB (volúmenes Docker)
+2. ✅ Milvus (volúmenes Docker)
+3. ✅ PostgreSQL (pg_dump + volúmenes Docker)
+
+### Backup Individual por Base de Datos
+
+```bash
+# Solo MongoDB
+./scripts/backup_mongodb_docker.sh
+
+# Solo Milvus
+./scripts/backup_volumes_docker.sh
+
+# Solo PostgreSQL
+./scripts/backup_postgres_docker.sh
+```
+
+### Backup Manual Completo (Legacy)
 
 ```bash
 ./scripts/backup_full.sh
@@ -91,12 +123,28 @@ Opciones disponibles:
 ## 📁 Estructura de Backup
 
 ```
-/Volumes/QNAPBackup/milvus-backups/
+/Volumes/JOAQUIN/milvus-backups/
+├── mongodb/
+│   └── mongodb_backup_20241231_143000/
+│       ├── mongo_mongo1_data.tar.gz
+│       ├── mongo_mongo2_data.tar.gz
+│       └── metadata.json
 ├── volumes/
 │   └── milvus_backup_20241231_143000/
 │       ├── milvus_milvus1_data.tar.gz
 │       ├── milvus_minio1_data.tar.gz
 │       ├── milvus_etcd1_data.tar.gz
+│       └── metadata.json
+├── postgres/
+│   └── postgres_backup_20241231_143000/
+│       ├── dumps/
+│       │   ├── postgres-gdash_all_databases.sql.gz
+│       │   ├── macrochat-postgres_all_databases.sql.gz
+│       │   └── ...
+│       ├── volumes/
+│       │   ├── macrochat_postgres-data.tar.gz
+│       │   ├── agents-postgres-data.tar.gz
+│       │   └── ...
 │       └── metadata.json
 ├── collections/
 │   └── backup_20241231_143000/
@@ -118,6 +166,19 @@ Opciones disponibles:
 | milvus-standalone-4 | 19533 | ✅ Activo |
 | milvus-standalone-5 | 19534 | ✅ Activo |
 | macrochat-milvus | 19540 | ✅ Activo |
+
+## 🐘 Instancias PostgreSQL Detectadas
+
+| Contenedor | Imagen | Volumen |
+|------------|--------|---------|
+| postgres-gdash | postgres:17 | - |
+| medimecum-postgres | postgres:16-alpine | - |
+| usreaderplus-db | postgres:16-alpine | usreaderplus_postgres_data |
+| macrochat-postgres | pgvector/pgvector:pg16 | macrochat_postgres-data |
+| postgres_graph_clinical | postgres:16-alpine | graph-gpt-5_postgres_graph_clinical_data |
+| agents-postgres | postgres:16-alpine | agents-postgres-data |
+| pgvector-container | pgvector/pgvector:pg16 | pgvector_data |
+| postgres_db1-5 | postgres:latest | postgres_db*_data |
 
 ## 🔄 Estrategias de Backup
 
