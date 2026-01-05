@@ -1,0 +1,71 @@
+# ============================================
+# QNAP Backup Manager - Multi-stage Dockerfile
+# ============================================
+
+# Stage 1: Build Frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Production Image
+FROM python:3.11-slim
+
+LABEL maintainer="QNAP Backup Manager"
+LABEL description="Docker backup management to QNAP NAS"
+LABEL version="1.0.0"
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    curl \
+    docker.io \
+    cifs-utils \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend
+COPY backend/ ./backend/
+
+# Copy scripts
+COPY scripts/ ./scripts/
+RUN chmod +x ./scripts/*.sh
+
+# Copy config
+COPY config.env ./
+
+# Copy built frontend
+COPY --from=frontend-builder /app/frontend/dist ./static/
+
+# Create directories
+RUN mkdir -p /app/logs /app/data
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV QNAP_MOUNT_POINT=/mnt/qnap
+ENV SCRIPTS_DIR=/app/scripts
+ENV BACKUP_BASE=/mnt/qnap/milvus-backups
+
+# Volume for persistent data (schedules config)
+VOLUME ["/app/data"]
+
+# Expose port
+EXPOSE 6640
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:6640/api/health || exit 1
+
+# Start command
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "6640"]

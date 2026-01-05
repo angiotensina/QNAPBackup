@@ -1,0 +1,61 @@
+services:
+  # ============================================
+  # QNAP Backup Manager
+  # ============================================
+  backup-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile.manager
+    image: qnap-backup-manager:latest
+    container_name: qnap-backup-manager
+    restart: unless-stopped
+    
+    ports:
+      - "6640:6640"
+    
+    environment:
+      - QNAP_HOST=192.168.1.140
+      - QNAP_SHARE=JOAQUIN
+      - QNAP_USER=CARMENVELASCO\joaquin
+      - QNAP_MOUNT_POINT=/mnt/qnap
+      - TZ=Europe/Madrid
+    
+    volumes:
+      # Docker socket para ejecutar comandos Docker
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+      # Montar el share QNAP (ya montado en host macOS)
+      - /Volumes/JOAQUIN:/mnt/qnap
+      
+      # Scripts personalizados
+      - ./scripts:/app/scripts:ro
+      
+      # Logs locales
+      - ./logs:/app/logs
+      
+      # Datos persistentes (schedules config)
+      - backup-manager-data:/app/data
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6640/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    networks:
+      - backup-network
+
+networks:
+  backup-network:
+    driver: bridge
+
+volumes:
+  backup-manager-data:
+    name: backup-manager-data
