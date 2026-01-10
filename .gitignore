@@ -1,7 +1,23 @@
 # Ignorar archivos sensibles
 .env
+config.env
 *.log
 logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+dist/
+dist-ssr/
 
 # macOS
 .DS_Store
@@ -9,3 +25,16 @@ logs/
 
 # Backups locales
 backups/
+
+# Repositorio anidado
+CONSTRUCCION BDS/DBMakerOK/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# Database data
+data/
+*.db
+*.sqlite
