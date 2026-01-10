@@ -37,11 +37,13 @@ class Settings(BaseSettings):
     QNAP_SHARE: str = "JOAQUIN"
     QNAP_MOUNT_POINT: str = "/Volumes/JOAQUIN"
     QNAP_USER: str = "CARMENVELASCO\\joaquin"
-    SCRIPTS_DIR: str = "/app/scripts"
+    SCRIPTS_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts')
     BACKUP_BASE: str = "/Volumes/JOAQUIN/milvus-backups"
     
-    class Config:
-        env_file = ".env"
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"  # Ignorar campos extra del .env
+    }
 
 
 settings = Settings()
@@ -75,8 +77,11 @@ async def lifespan(app: FastAPI):
     global backup_scheduler
     
     # Startup
+    import os
+    data_dir = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data'))
+    os.makedirs(data_dir, exist_ok=True)
     backup_scheduler = BackupScheduler(
-        config_file="/app/data/schedules.json",
+        config_file=os.path.join(data_dir, 'schedules.json'),
         backup_callback=scheduled_backup_callback
     )
     backup_scheduler.start()
