@@ -1,0 +1,112 @@
+name: Deploy to Remote Server
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch: # Permite ejecutar manualmente
+
+jobs:
+  deploy:
+    name: Update Containers on Remote Server
+    runs-on: ubuntu-latest
+    # Solo ejecutar si es un push a main o un PR cerrado con merge
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event.pull_request.merged == true)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.REMOTE_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Remote Server
+        env:
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PATH: ${{ secrets.REMOTE_PATH }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << 'EOF'
+            cd ${REMOTE_PATH}
+            
+            echo "📦 Pulling latest changes from GitHub..."
+            git pull origin main
+            
+            echo "🔄 Updating all containers except clinica-app..."
+            
+            # Obtener lista de todos los contenedores en ejecución
+            ALL_CONTAINERS=$(docker ps --format "{{.Names}}")
+            
+            # Filtrar contenedores que NO sean clinica-app
+            CONTAINERS_TO_UPDATE=""
+            for container in $ALL_CONTAINERS; do
+              if [[ ! "$container" =~ clinica-app ]]; then
+                CONTAINERS_TO_UPDATE="$CONTAINERS_TO_UPDATE $container"
+              fi
+            done
+            
+            echo "Contenedores a actualizar: $CONTAINERS_TO_UPDATE"
+            
+            # Actualizar el backup manager si existe
+            if docker ps -q -f name=qnap-backup-manager > /dev/null 2>&1; then
+              echo "🔄 Actualizando QNAP Backup Manager..."
+              docker-compose -f docker-compose.manager.yml pull
+              docker-compose -f docker-compose.manager.yml up -d --build --force-recreate
+            fi
+            
+            # Actualizar el backup automático si existe
+            if docker ps -q -f name=milvus-mongodb-backup > /dev/null 2>&1; then
+              echo "🔄 Actualizando Milvus MongoDB Backup..."
+              docker-compose -f docker-compose.yml pull
+              docker-compose -f docker-compose.yml up -d --build --force-recreate
+            fi
+            
+            echo "✅ Deployment completed successfully!"
+            echo "📊 Current running containers:"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+          EOF
+
+      - name: Verify Deployment
+        env:
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << 'EOF'
+            echo "🔍 Verificando estado de contenedores..."
+            
+            # Verificar que los contenedores están corriendo
+            if docker ps -q -f name=qnap-backup-manager > /dev/null 2>&1; then
+              echo "✅ qnap-backup-manager: Running"
+            else
+              echo "⚠️  qnap-backup-manager: Not found or stopped"
+            fi
+            
+            if docker ps -q -f name=milvus-mongodb-backup > /dev/null 2>&1; then
+              echo "✅ milvus-mongodb-backup: Running"
+            else
+              echo "⚠️  milvus-mongodb-backup: Not found or stopped"
+            fi
+            
+            # Verificar que clinica-app NO fue modificado
+            if docker ps -q -f name=clinica-app > /dev/null 2>&1; then
+              CLINICA_UPTIME=$(docker inspect --format='{{.State.StartedAt}}' $(docker ps -q -f name=clinica-app))
+              echo "✅ clinica-app: Intacto - Running since $CLINICA_UPTIME"
+            fi
+          EOF
+
+      - name: Notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ Deployment exitoso - Todos los contenedores actualizados excepto clinica-app"
+          else
+            echo "❌ Deployment falló - Revisar logs"
+          fi
