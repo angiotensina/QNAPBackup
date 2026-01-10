@@ -49,14 +49,38 @@ mkdir -p "$QNAP_MOUNT_POINT/milvus-backups/mongodb"
 mkdir -p "$QNAP_MOUNT_POINT/milvus-backups/volumes"
 mkdir -p "$QNAP_MOUNT_POINT/milvus-backups/postgres"
 mkdir -p "$QNAP_MOUNT_POINT/milvus-backups/logs"
+mkdir -p "$QNAP_MOUNT_POINT/milvus-backups/structure"
+
+# Ruta a la estructura de las bases de datos
+DBMAKER_PATH="${DBMAKER_PATH:-/Users/joaquinchamorromohedas/Desktop/QNAPBackup/CONSTRUCCION BDS/DBMakerOK}"
 
 # Variables para tracking de éxito
 MONGO_SUCCESS=false
 MILVUS_SUCCESS=false
 POSTGRES_SUCCESS=false
+STRUCTURE_SUCCESS=false
 
-# 2. Backup de MongoDB (Parent)
-echo "📌 Paso 2: Backup de MongoDB (Parent - Documentos)..."
+# 2. Backup de la estructura de bases de datos (docker-compose, .env)
+echo "📌 Paso 2: Backup de estructura de bases de datos..."
+STRUCTURE_BACKUP_PATH="$QNAP_MOUNT_POINT/milvus-backups/structure/dbmaker_${TIMESTAMP}"
+mkdir -p "$STRUCTURE_BACKUP_PATH"
+
+if [ -d "$DBMAKER_PATH" ]; then
+    # Copiar toda la carpeta DBMakerOK
+    cp -R "$DBMAKER_PATH"/* "$STRUCTURE_BACKUP_PATH/" 2>/dev/null && {
+        STRUCTURE_SUCCESS=true
+        echo "✅ Estructura de BDs guardada en: $STRUCTURE_BACKUP_PATH"
+        echo "   📁 Incluye: mongo/, postgres/, milvus/, redis/, neo4j/"
+    } || {
+        echo "⚠️  Error copiando estructura de BDs"
+    }
+else
+    echo "⚠️  No se encontró la estructura en: $DBMAKER_PATH"
+fi
+echo ""
+
+# 3. Backup de MongoDB (Parent)
+echo "📌 Paso 3: Backup de MongoDB (Parent - Documentos)..."
 if "$SCRIPT_DIR/backup_mongodb_docker.sh"; then
     MONGO_SUCCESS=true
     echo "✅ Backup de MongoDB completado"
@@ -65,8 +89,8 @@ else
 fi
 echo ""
 
-# 3. Backup de Milvus (Child)
-echo "📌 Paso 3: Backup de Milvus (Child - Vectores)..."
+# 4. Backup de Milvus (Child)
+echo "📌 Paso 4: Backup de Milvus (Child - Vectores)..."
 if "$SCRIPT_DIR/backup_volumes_docker.sh"; then
     MILVUS_SUCCESS=true
     echo "✅ Backup de Milvus completado"
@@ -75,8 +99,8 @@ else
 fi
 echo ""
 
-# 4. Backup de PostgreSQL
-echo "📌 Paso 4: Backup de PostgreSQL (Datos relacionales)..."
+# 5. Backup de PostgreSQL
+echo "📌 Paso 5: Backup de PostgreSQL (Datos relacionales)..."
 if "$SCRIPT_DIR/backup_postgres_docker.sh"; then
     POSTGRES_SUCCESS=true
     echo "✅ Backup de PostgreSQL completado"
@@ -85,8 +109,8 @@ else
 fi
 echo ""
 
-# 5. Generar metadatos de consistencia
-echo "📌 Paso 5: Generando metadatos de consistencia..."
+# 6. Generar metadatos de consistencia
+echo "📌 Paso 6: Generando metadatos de consistencia..."
 CONSISTENCY_FILE="$QNAP_MOUNT_POINT/milvus-backups/backup_full_${TIMESTAMP}.json"
 
 cat > "$CONSISTENCY_FILE" << EOF
@@ -95,6 +119,11 @@ cat > "$CONSISTENCY_FILE" << EOF
     "backup_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
     "backup_type": "full_database_backup",
     "databases_included": {
+        "structure": {
+            "success": $STRUCTURE_SUCCESS,
+            "path": "structure/dbmaker_${TIMESTAMP}",
+            "description": "Docker-compose y archivos .env para recrear contenedores"
+        },
         "mongodb": {
             "success": $MONGO_SUCCESS,
             "path": "mongodb/mongodb_backup_${TIMESTAMP}",
@@ -139,16 +168,14 @@ cat > "$CONSISTENCY_FILE" << EOF
     "restore_instructions": {
         "warning": "IMPORTANTE: Para mantener consistencia, restaurar todos los backups del MISMO timestamp",
         "steps": [
-            "1. Detener TODOS los contenedores de bases de datos",
+            "1. Copiar estructura desde structure/dbmaker_TIMESTAMP a ubicación deseada",
             "2. Restaurar volúmenes de MongoDB",
             "3. Restaurar volúmenes de Milvus",
-            "4. Restaurar volúmenes de PostgreSQL (o usar pg_restore)",
-            "5. Iniciar contenedores MongoDB primero",
-            "6. Esperar que MongoDB esté healthy",
-            "7. Iniciar contenedores Milvus",
-            "8. Iniciar contenedores PostgreSQL",
-            "9. Verificar integridad de todas las bases de datos"
-        ]
+            "4. Restaurar volúmenes de PostgreSQL",
+            "5. Ejecutar docker compose up -d en cada carpeta (mongo, postgres, milvus)",
+            "6. Verificar integridad de todas las bases de datos"
+        ],
+        "structure_restore": "cp -R structure/dbmaker_TIMESTAMP/* /ruta/destino/"
     }
 }
 EOF
@@ -157,6 +184,7 @@ echo "✅ Metadatos guardados en: $CONSISTENCY_FILE"
 echo ""
 
 # Resumen final
+STRUCTURE_SIZE=$(du -sh "$QNAP_MOUNT_POINT/milvus-backups/structure" 2>/dev/null | cut -f1 || echo "N/A")
 MONGO_SIZE=$(du -sh "$QNAP_MOUNT_POINT/milvus-backups/mongodb" 2>/dev/null | cut -f1 || echo "N/A")
 MILVUS_SIZE=$(du -sh "$QNAP_MOUNT_POINT/milvus-backups/volumes" 2>/dev/null | cut -f1 || echo "N/A")
 POSTGRES_SIZE=$(du -sh "$QNAP_MOUNT_POINT/milvus-backups/postgres" 2>/dev/null | cut -f1 || echo "N/A")
@@ -167,6 +195,7 @@ echo "   ✅ BACKUP COMPLETO FINALIZADO"
 echo "=================================================="
 echo ""
 echo "📊 Resumen de Backups:"
+echo "   🏗️  Estructura:  $STRUCTURE_SIZE $([ "$STRUCTURE_SUCCESS" = true ] && echo "✅" || echo "❌")"
 echo "   🍃 MongoDB:     $MONGO_SIZE $([ "$MONGO_SUCCESS" = true ] && echo "✅" || echo "❌")"
 echo "   🔷 Milvus:      $MILVUS_SIZE $([ "$MILVUS_SUCCESS" = true ] && echo "✅" || echo "❌")"
 echo "   🐘 PostgreSQL:  $POSTGRES_SIZE $([ "$POSTGRES_SUCCESS" = true ] && echo "✅" || echo "❌")"
@@ -174,9 +203,10 @@ echo "   ━━━━━━━━━━━━━━━━━━━━━━━�
 echo "   📦 Total:       $TOTAL_SIZE"
 echo ""
 echo "📁 Ubicación: $QNAP_MOUNT_POINT/milvus-backups/"
+echo "🏗️  Estructura: $QNAP_MOUNT_POINT/milvus-backups/structure/dbmaker_${TIMESTAMP}/"
 echo ""
-echo "💡 Recuerda: Al restaurar, hazlo de TODAS las bases de datos"
-echo "   del MISMO backup para mantener la integridad referencial."
+echo "💡 La estructura incluye docker-compose.yml y .env para recrear"
+echo "   los contenedores desde cero si es necesario."
 echo ""
 
 # Estado de salida
